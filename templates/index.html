@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SocketChat — Real-Time Messenger</title>
+  <meta name="description" content="A real-time chat application built with Python Flask-SocketIO and WebSockets." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <!-- ── Username Modal ─────────────────────────────────────────────────── -->
+  <div id="modal-overlay" class="modal-overlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div class="modal-logo">💬</div>
+      <h1 id="modal-title">SocketChat</h1>
+      <p class="modal-subtitle">Real-time messaging, powered by Python</p>
+      <form id="join-form" autocomplete="off">
+        <input
+          id="username-input"
+          type="text"
+          placeholder="Choose a username…"
+          maxlength="24"
+          required
+          autofocus
+        />
+        <button type="submit" id="join-btn">Join Chat →</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Main App ───────────────────────────────────────────────────────── -->
+  <div id="app" class="app hidden">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <span class="logo-icon">💬</span>
+        <span class="logo-text">SocketChat</span>
+      </div>
+      <div class="online-panel">
+        <div class="online-badge">
+          <span class="pulse"></span>
+          <span id="online-count">1</span> online
+        </div>
+      </div>
+      <div class="sidebar-footer">
+        <div id="my-username-display" class="my-username"></div>
+        <div class="tech-badge">Flask · SocketIO · Python</div>
+      </div>
+    </aside>
+
+    <!-- Chat Area -->
+    <main class="chat-area">
+      <header class="chat-header">
+        <div class="header-info">
+          <h2>General</h2>
+          <span class="header-sub">Public room · WebSocket connection</span>
+        </div>
+        <div id="connection-status" class="status-indicator connected">
+          <span class="status-dot"></span> Connected
+        </div>
+      </header>
+
+      <div id="messages" class="messages" role="log" aria-live="polite" aria-label="Chat messages">
+        <div class="welcome-msg">
+          <span>🎉</span>
+          <span>Welcome to SocketChat! Say hello.</span>
+        </div>
+      </div>
+
+      <footer class="input-bar">
+        <form id="message-form" autocomplete="off">
+          <input
+            id="message-input"
+            type="text"
+            placeholder="Type a message…"
+            maxlength="500"
+            aria-label="Message input"
+          />
+          <button type="submit" id="send-btn" aria-label="Send message">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+          </button>
+        </form>
+      </footer>
+    </main>
+  </div>
+
+  <!-- Socket.IO client (served by Flask-SocketIO automatically) -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
