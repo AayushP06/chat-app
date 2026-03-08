@@ -91,6 +91,14 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/db-check")
+def db_check():
+    from flask import jsonify
+    total = Message.query.count()
+    last5 = [m.to_dict() for m in Message.query.order_by(Message.id.desc()).limit(5).all()]
+    return jsonify({"total_messages": total, "last_5": last5})
+
+
 # ── SOCKET EVENTS ────────────────────────────────────────────────────────────
 @socketio.on("connect")
 def on_connect():
