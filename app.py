@@ -1,64 +1,110 @@
 from flask import Flask, render_template, request
-from flask_socketio import SocketIO, emit, join_room, leave_room
+from flask_socketio import SocketIO, emit
+from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timezone
 import threading
 import os
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "chatapp-secret-2026"
+
+# SQLite locally by default — no setup needed.
+# To use PostgreSQL in production, set DATABASE_URL env var.
+db_url = os.environ.get("DATABASE_URL", "sqlite:///chat.db")
+# SQLAlchemy requires 'postgresql://' not 'postgres://' (Render uses the old style)
+if db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql://", 1)
+app.config["SQLALCHEMY_DATABASE_URI"] = db_url
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+db = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 
-connected_users = {}    
-message_history = []      
-pending_disconnects = {}  
-MAX_HISTORY = 50
-RECONNECT_GRACE = 5.0    
+# ── MODEL ──────────────────────────────────────────────────────────────────────
+class Message(db.Model):
+    id        = db.Column(db.Integer, primary_key=True)
+    type      = db.Column(db.String(10))          # 'message' or 'event'
+    username  = db.Column(db.String(50))
+    text      = db.Column(db.Text, nullable=False)
+    timestamp = db.Column(db.String(5))           # stored as "HH:MM"
+
+    def to_dict(self):
+        return {
+            "type":      self.type,
+            "username":  self.username,
+            "text":      self.text,
+            "timestamp": self.timestamp,
+        }
+
+
+with app.app_context():
+    db.create_all()
+
+
+# ── IN-MEMORY STATE (unchanged) ─────────────────────────────────────────────
+connected_users    = {}
+pending_disconnects = {}
+MAX_HISTORY        = 50
+RECONNECT_GRACE    = 5.0
 
 
 def now_str():
     return datetime.now(timezone.utc).strftime("%H:%M")
 
 
+def _store(msg: dict):
+    """Persist a message to DB, keeping only the last MAX_HISTORY rows."""
+    entry = Message(
+        type=msg.get("type"),
+        username=msg.get("username"),
+        text=msg["text"],
+        timestamp=msg["timestamp"],
+    )
+    db.session.add(entry)
+    db.session.commit()
+
+    # Trim oldest rows beyond MAX_HISTORY
+    total = Message.query.count()
+    if total > MAX_HISTORY:
+        oldest = Message.query.order_by(Message.id).limit(total - MAX_HISTORY).all()
+        for row in oldest:
+            db.session.delete(row)
+        db.session.commit()
 
 
+def _get_history():
+    rows = Message.query.order_by(Message.id).all()
+    return [r.to_dict() for r in rows]
+
+
+# ── ROUTES ──────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
     return render_template("index.html")
 
 
-
-
+# ── SOCKET EVENTS ────────────────────────────────────────────────────────────
 @socketio.on("connect")
 def on_connect():
-    """Client connected — we wait for them to send a 'join' event with a username."""
     pass
 
 
 @socketio.on("join")
 def on_join(data):
-    """Client sends {username} after choosing a name."""
     username = (data.get("username") or "Anonymous").strip()[:24]
     sid = request.sid
     connected_users[sid] = username
 
-    
     if username in pending_disconnects:
-       
         pending_disconnects.pop(username).cancel()
-        
-        emit("history", {"messages": message_history})
+        emit("history", {"messages": _get_history()})
         socketio.emit("online_count", {"count": len(connected_users)})
         return
 
+    emit("history", {"messages": _get_history()})
 
-    emit("history", {"messages": message_history})
-
-    event_msg = {
-        "type": "event",
-        "text": f"{username} joined the chat",
-        "timestamp": now_str(),
-    }
+    event_msg = {"type": "event", "text": f"{username} joined the chat", "timestamp": now_str()}
     _store(event_msg)
     emit("user_event", event_msg, broadcast=True)
     socketio.emit("online_count", {"count": len(connected_users)})
@@ -66,23 +112,20 @@ def on_join(data):
 
 @socketio.on("send_message")
 def on_send_message(data):
-    """Client sends {text}."""
     sid = request.sid
     username = connected_users.get(sid, "Anonymous")
     text = (data.get("text") or "").strip()
-
     if not text:
         return
 
     msg = {
-        "type": "message",
-        "username": username,
-        "text": text,
+        "type":      "message",
+        "username":  username,
+        "text":      text,
         "timestamp": now_str(),
-        "self_sid": sid,
+        "self_sid":  sid,
     }
     _store({k: v for k, v in msg.items() if k != "self_sid"})
-
     emit("new_message", msg, broadcast=True)
 
 
@@ -93,17 +136,11 @@ def on_disconnect():
     if not username:
         return
 
-
     socketio.emit("online_count", {"count": len(connected_users)})
 
-   
     def broadcast_leave():
         pending_disconnects.pop(username, None)
-        event_msg = {
-            "type": "event",
-            "text": f"{username} left the chat",
-            "timestamp": now_str(),
-        }
+        event_msg = {"type": "event", "text": f"{username} left the chat", "timestamp": now_str()}
         _store(event_msg)
         socketio.emit("user_event", event_msg)
 
@@ -112,16 +149,7 @@ def on_disconnect():
     timer.start()
 
 
-
-
-def _store(msg):
-    message_history.append(msg)
-    if len(message_history) > MAX_HISTORY:
-        message_history.pop(0)
-
-
-
-
+# ── MAIN ─────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     print(f"🚀  Chat server running → http://localhost:{port}")
