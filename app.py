@@ -2,6 +2,7 @@ from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from datetime import datetime, timezone
 import threading
+import os
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "chatapp-secret-2026"
@@ -122,5 +123,6 @@ def _store(msg):
 
 
 if __name__ == "__main__":
-    print("🚀  Chat server running → http://localhost:5000")
-    socketio.run(app, host="0.0.0.0", port=5000, debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    print(f"🚀  Chat server running → http://localhost:{port}")
+    socketio.run(app, host="0.0.0.0", port=port, debug=False)

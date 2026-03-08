@@ -14,7 +14,11 @@ export function useSocket(username) {
     if (!username) return
 
 
-    const socket = io('/', {
+    // In development: '/' is proxied by Vite to localhost:5000
+    // In production:  VITE_BACKEND_URL points to your Railway/Render backend
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || '/'
+
+    const socket = io(backendUrl, {
       transports: ['websocket'],  // skip long-polling, go straight to WS
     })
     socketRef.current = socket

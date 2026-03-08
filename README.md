@@ -21,9 +21,13 @@ A full-stack real-time chat application built with **Python (Flask + Socket.IO)*
 chat app/
 ├── app.py                  # Flask + Socket.IO backend
 ├── requirements.txt        # Python dependencies
+├── Procfile                # Start command for Railway/Render
 ├── .gitignore
 └── client/                 # React (Vite) frontend
     ├── vite.config.js      # Dev server + proxy to Flask
+    ├── vercel.json         # Vercel deployment config
+    ├── .env.development    # Dev env (no URL needed, proxy handles it)
+    ├── .env.production     # Production env (set VITE_BACKEND_URL here)
     └── src/
         ├── main.jsx
         ├── App.jsx
@@ -34,23 +38,19 @@ chat app/
 
 ---
 
-## ⚙️ Setup & Running
+## ⚙️ Local Development
 
 ### 1. Backend (Python)
 
 ```bash
-# Create and activate virtual environment
 python -m venv venv
 .\venv\Scripts\Activate.ps1        # Windows PowerShell
-# source venv/bin/activate         # macOS/Linux
 
-# Install dependencies
-python -m pip install flask flask-socketio
+pip install -r requirements.txt
 
-# Start the backend
 python app.py
+# → http://localhost:5000
 ```
-Backend runs at → `http://localhost:5000`
 
 ### 2. Frontend (React)
 
@@ -58,24 +58,55 @@ Backend runs at → `http://localhost:5000`
 cd client
 npm install
 npm run dev
+# → http://localhost:3000
 ```
-Frontend runs at → `http://localhost:3000`
 
-### 3. Open in Browser
+---
 
-Go to **http://localhost:3000** and enter a username.  
-Open in **multiple tabs or devices** to test real-time messaging.
+## 🚢 Deployment (Split)
+
+> Frontend → **Vercel** | Backend → **Railway** (or Render/Fly.io)
+
+### Step 1 — Deploy Backend (Railway)
+
+1. Go to [railway.app](https://railway.app) → **New Project → Deploy from GitHub Repo**
+2. Select this repo, Railway auto-detects Python via `Procfile`
+3. After deploy, copy your backend URL (e.g. `https://your-app.railway.app`)
+
+### Step 2 — Set Production Frontend URL
+
+Edit `client/.env.production`:
+```
+VITE_BACKEND_URL=https://your-app.railway.app
+```
+> ⚠️ This file is gitignored — set it as a **Vercel Environment Variable** instead (see Step 3).
+
+### Step 3 — Deploy Frontend (Vercel)
+
+1. Go to [vercel.com](https://vercel.com) → **New Project → Import Git Repo**
+2. Set **Root Directory** to `client`
+3. Add an **Environment Variable**:
+   - Key: `VITE_BACKEND_URL`
+   - Value: your Railway backend URL
+4. Deploy — Vercel uses `vercel.json` for config automatically
+
+### Step 4 — Add CORS Origin to Backend
+
+In `app.py`, update CORS to allow your Vercel frontend:
+```python
+socketio = SocketIO(app, cors_allowed_origins="https://your-app.vercel.app", async_mode="threading")
+```
 
 ---
 
 ## 📡 How Frontend & Backend Connect
 
 ```
-React (port 3000)
+React (Vercel)
      │
-     │  /socket.io/* → proxied by Vite
+     │  socket.io → VITE_BACKEND_URL (Railway)
      ▼
-Flask-SocketIO (port 5000)
+Flask-SocketIO (Railway)
 ```
 
 | React emits (`useSocket.js`) | Flask handles (`app.py`) | Flask broadcasts back |
@@ -86,24 +117,15 @@ Flask-SocketIO (port 5000)
 
 ---
 
-## 🌐 Access from Other Devices (Same Wi-Fi)
-
-Other devices on the same network can access the app at:
-```
-http://<your-local-ip>:3000
-```
-Find your IP with `ipconfig` (Windows) or `ifconfig` (macOS/Linux).
-
----
-
 ## ⚖️ Tradeoffs
 
 | Decision | Chosen | Alternative |
 |---|---|---|
 | Transport | WebSockets (low latency, full duplex) | HTTP polling (simple but slow) |
-| Async mode | Threading | Eventlet (deprecated) / Gevent |
+| Async mode | Threading | Eventlet / Gevent |
 | Message storage | In-memory (fast, zero setup) | Database (persistent but more setup) |
 | Frontend | React + Vite (component-based) | Plain HTML/JS (simpler) |
+| Deployment | Split (Vercel + Railway) | Single server (simpler, but no WS on Vercel) |
 
 ---
 
@@ -112,3 +134,4 @@ Find your IP with `ipconfig` (Windows) or `ifconfig` (macOS/Linux).
 - **Backend**: Python · Flask · Flask-SocketIO
 - **Frontend**: React · Vite · socket.io-client
 - **Protocol**: WebSocket (via Socket.IO)
+- **Hosting**: Vercel (frontend) + Railway (backend)

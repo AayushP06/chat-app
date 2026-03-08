@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 *.pyo
 .env
+client/.env.production
 
 # Node
 client/node_modules/
